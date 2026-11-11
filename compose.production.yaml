@@ -16,13 +16,14 @@ services:
       GATEKEEPER_URL: https://login.haguma.com
       COOKIE_DOMAIN: haguma.com
       GATEKEEPER_USERNAME: Fabrice
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in deploy/.env.production}
-      PROXY_AUTH_SECRET: ${PROXY_AUTH_SECRET:?Set PROXY_AUTH_SECRET in deploy/.env.production}
-      PROTECTED_APPS: ${PROTECTED_APPS:?Set PROTECTED_APPS in deploy/.env.production}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in backend/.env}
+      PROXY_AUTH_SECRET: ${PROXY_AUTH_SECRET:?Set PROXY_AUTH_SECRET in backend/.env}
+      # Keep the real app list in ignored backend/.env; pass --env-file backend/.env.
+      PROTECTED_APPS: ${PROTECTED_APPS:?Set PROTECTED_APPS in backend/.env}
       SESSION_TTL_HOURS: "168"
       DATABASE_PATH: /data/gatekeeper.sqlite
       # Start with false, inspect the actual frontend and Caddy IPs, then set
-      # their exact /32 addresses in deploy/.env.production and recreate backend.
+      # their exact /32 addresses in backend/.env and recreate backend.
       TRUST_PROXY: ${TRUST_PROXY:-false}
     volumes:
       - gatekeeper_data:/data

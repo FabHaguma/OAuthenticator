@@ -3,7 +3,7 @@
 # Phase 2: REPLACE the existing masters.haguma.com block with the block below.
 # Keep every other site's routing as it is.
 # Replace PASTE_THE_PROXY_SECRET_HERE with the EXACT PROXY_AUTH_SECRET from
-# deploy/.env.production. Keep the deployed Caddyfile private; do not commit it.
+# backend/.env. Keep the deployed Caddyfile private; do not commit it.
 
 login.haguma.com {
     route {

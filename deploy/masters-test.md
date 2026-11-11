@@ -42,24 +42,29 @@ From this point, run project commands inside that VPS folder:
 
 ```sh
 cd ~/apps/gatekeeper
-cp deploy/.env.production.example deploy/.env.production
-chmod 600 deploy/.env.production
+test -f backend/.env || cp backend/.env.example backend/.env
+chmod 600 backend/.env
 ```
 
 ## 3. Set production credentials
 
-Edit `deploy/.env.production`. Set a new password (at least 12 characters, maximum 72 UTF-8 bytes) and a random proxy secret. Single-quote the password value if it contains `$`, `#`, or spaces so Compose preserves it literally. One simple secret generator on the VPS is:
+Edit `backend/.env`. Keep existing production credentials when updating a running installation. For a first setup, set a new password (at least 12 characters, maximum 72 UTF-8 bytes) and a random proxy secret. Single-quote the password value if it contains `$`, `#`, or spaces so Compose preserves it literally. One simple secret generator on the VPS is:
 
 ```sh
 openssl rand -hex 32
 ```
 
-Copy that generated value into `PROXY_AUTH_SECRET` and keep it for the Caddy step. Do not use the example placeholder. The file also selects an identifiable image release tag. The Compose file already sets:
+For a first setup, copy that generated value into `PROXY_AUTH_SECRET` and keep it for the Caddy step. Replace the active local-demo `PROTECTED_APPS` value with your complete production app list, keeping exactly one assignment. Use this generic format with your actual HTTPS origins under `haguma.com`:
+
+```dotenv
+PROTECTED_APPS='[{"id":"your-app","name":"Your app","url":"https://app.example.com"}]'
+```
+
+Keep the real app list only in ignored `backend/.env`; committed examples use placeholders. Compose reads this list at runtime through `--env-file backend/.env`. Optionally set `GATEKEEPER_RELEASE` in the same file to select an identifiable image tag. The Compose file sets:
 
 ```text
 GATEKEEPER_URL=https://login.haguma.com
 COOKIE_DOMAIN=haguma.com
-PROTECTED_APPS=[{"id":"masters","name":"Master's Tracker","url":"https://masters.haguma.com"}]
 DATABASE_PATH=/data/gatekeeper.sqlite
 ```
 
@@ -70,24 +75,32 @@ The trial starts with a new persistent database; your local development database
 ## 4. Start only Gatekeeper
 
 ```sh
-docker compose --env-file deploy/.env.production -f compose.production.yaml config --quiet
-docker compose --env-file deploy/.env.production -f compose.production.yaml up -d --build
-docker compose --env-file deploy/.env.production -f compose.production.yaml ps
+docker compose --env-file backend/.env -f compose.production.yaml config --quiet
+docker compose --env-file backend/.env -f compose.production.yaml up -d --build
+docker compose --env-file backend/.env -f compose.production.yaml ps
 ```
 
 Do not continue unless both services are healthy. Investigate a failing service with:
 
 ```sh
-docker compose --env-file deploy/.env.production -f compose.production.yaml logs --tail=80 backend_gatekeeper frontend_gatekeeper
+docker compose --env-file backend/.env -f compose.production.yaml logs --tail=80 backend_gatekeeper frontend_gatekeeper
 ```
 
 `config --quiet` validates without displaying expanded credentials. The health checks verify backend readiness and the Nginx process. Also test Nginx-to-backend routing:
 
 ```sh
-docker compose --env-file deploy/.env.production -f compose.production.yaml exec frontend_gatekeeper wget -qO- http://127.0.0.1/health
+docker compose --env-file backend/.env -f compose.production.yaml exec frontend_gatekeeper wget -qO- http://127.0.0.1/health
 ```
 
 Expect `{"status":"ok"}`. If an existing Caddyfile already routes login elsewhere, do not add a duplicate site block: update that block.
+
+For later app-list changes, edit `backend/.env`, validate with `config --quiet`, and run:
+
+```sh
+docker compose --env-file backend/.env -f compose.production.yaml up -d backend_gatekeeper
+```
+
+Compose recreates the backend when its environment changes; no image rebuild is needed. Adding a new hostname also requires its Caddy gate, followed by Caddy validation and reload. Keep the real environment file on the VPS when pulling updates.
 
 ## 5. Publish the login host first
 
@@ -132,13 +145,13 @@ Start a fresh private window so there is no existing session or cached applicati
 7. While signed in, test outage behavior:
 
 ```sh
-docker compose --env-file deploy/.env.production -f compose.production.yaml stop backend_gatekeeper
+docker compose --env-file backend/.env -f compose.production.yaml stop backend_gatekeeper
 ```
 
 Masters must return an error rather than admit a new request. Other sites should remain unaffected. Then restore it:
 
 ```sh
-docker compose --env-file deploy/.env.production -f compose.production.yaml start backend_gatekeeper
+docker compose --env-file backend/.env -f compose.production.yaml start backend_gatekeeper
 ```
 
 Confirm access works again. The SQLite volume retains sessions across backend restarts. Existing long-running streams/WebSockets are not forcibly disconnected by logout.
@@ -160,7 +173,7 @@ masters.haguma.com {
 Validate and reload Caddy as in step 5. Masters is public again, just as before the trial. You can leave the login service running while investigating, or remove its Caddy block and stop only the two Gatekeeper services:
 
 ```sh
-docker compose --env-file deploy/.env.production -f compose.production.yaml stop
+docker compose --env-file backend/.env -f compose.production.yaml stop
 ```
 
 Keep the database volume. Do not run `down -v`, prune volumes, or restart the whole shared stack as a rollback step.

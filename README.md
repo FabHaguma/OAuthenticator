@@ -99,6 +99,20 @@ PROTECTED_APPS='[{"id":"notes","name":"Notes","url":"https://notes.example.com"}
 
 Use origins rather than paths: `https://notes.example.com`, not `https://notes.example.com/private`. Configure which paths are protected in Caddy. Restart Gatekeeper after configuration changes.
 
+### Update protected apps on the VPS
+
+1. Edit `backend/.env` in your VPS checkout. Keep exactly one `PROTECTED_APPS` line containing the complete JSON array of apps; use the generic format above with your own HTTPS origins.
+2. From that checkout, validate and apply the configuration:
+
+```sh
+docker compose --env-file backend/.env -f compose.production.yaml config --quiet
+docker compose --env-file backend/.env -f compose.production.yaml up -d backend_gatekeeper
+```
+
+Run the second command only after validation succeeds. Compose passes `PROTECTED_APPS` from the environment file into the backend; no image rebuild is needed for app-list changes. An existing app's Caddy route stays as it is. Add a Caddy `forward_auth` gate for each newly protected hostname, then validate and reload Caddy as described below.
+
+The real app list belongs only in ignored `backend/.env` on each machine. Keep generic placeholders in committed examples. The environment file is also excluded from Docker build contexts; Compose supplies its selected values at runtime. Commit and push the Compose wiring and documentation, and edit the VPS environment file directly.
+
 The first version deliberately supports trusted apps under one parent domain. A shared parent-domain cookie means every host under that domain must be trusted; a compromised or untrusted sibling host can undermine this boundary. The Caddy example redacts the gateway cookie before forwarding to your apps, but does not make untrusted sibling domains safe. Unrelated domains require a separate login handoff design.
 
 ### Change your password
