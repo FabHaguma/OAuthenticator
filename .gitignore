@@ -137,3 +137,10 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Private Gatekeeper runtime data (including SQLite WAL/SHM sidecars)
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+backend/data/

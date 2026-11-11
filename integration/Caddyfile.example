@@ -1,0 +1,60 @@
+# Example only: merge the relevant blocks into your existing Caddy config.
+# Replace example.com, upstream addresses, and the Caddy environment variable.
+# Keep Gatekeeper and app upstreams private; only Caddy should be internet-facing.
+# Gatekeeper config must match:
+#   NODE_ENV=production
+#   GATEKEEPER_URL=https://login.example.com
+#   COOKIE_DOMAIN=example.com
+#   PROTECTED_APPS=[{"id":"notes","name":"Notes","url":"https://notes.example.com"}]
+#   PROXY_AUTH_SECRET=<same random value as Caddy's GATEKEEPER_PROXY_SECRET>
+# If Caddy is in a container, use your private service DNS names in place of
+# 127.0.0.1 and trust only Caddy's actual private IP/range in TRUST_PROXY.
+
+(gatekeeper) {
+    forward_auth 127.0.0.1:4000 {
+        uri /auth/verify
+
+        # These values come from Caddy, never from client-supplied headers.
+        header_up X-Gatekeeper-Proxy-Key {$GATEKEEPER_PROXY_SECRET}
+        header_up X-Forwarded-Proto {scheme}
+        header_up X-Forwarded-Host {hostport}
+        header_up X-Forwarded-Uri {orig_uri}
+        header_up X-Forwarded-Method {orig_method}
+        header_up X-Forwarded-For {remote_host}
+        transport http {
+            dial_timeout 3s
+            response_header_timeout 5s
+        }
+    }
+}
+
+login.example.com {
+    route {
+        # Verification is called internally by forward_auth, not via this host.
+        @internal path /auth/verify /auth/verify/*
+        respond @internal 404
+
+        reverse_proxy 127.0.0.1:4000 {
+            header_up -X-Gatekeeper-Proxy-Key
+        }
+    }
+}
+
+notes.example.com {
+    route {
+        import gatekeeper
+
+        reverse_proxy 127.0.0.1:3000 {
+            # Keep the app's own cookies, but redact the gateway credential.
+            # Do this on EVERY protected application's upstream proxy.
+            header_up Cookie "(^|;[ \\t]*)gatekeeper_session=[^;]*" "${1}gatekeeper_session="
+            header_up -X-Gatekeeper-Proxy-Key
+        }
+    }
+}
+
+# To add another app:
+# 1. Add its exact HTTPS origin to PROTECTED_APPS and restart Gatekeeper.
+# 2. Add its Caddy site block with `import gatekeeper` before its upstream proxy.
+# 3. Include the same cookie redaction and secret-header removal above.
+# 4. Keep its original listening port private so the login cannot be bypassed.

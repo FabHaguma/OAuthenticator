@@ -1,0 +1,74 @@
+name: gatekeeper
+
+services:
+  backend_gatekeeper:
+    image: gatekeeper-backend:${GATEKEEPER_RELEASE:-haguma-test1}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: backend
+    restart: unless-stopped
+    init: true
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: "4000"
+      GATEKEEPER_URL: https://login.haguma.com
+      COOKIE_DOMAIN: haguma.com
+      GATEKEEPER_USERNAME: Fabrice
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in deploy/.env.production}
+      PROXY_AUTH_SECRET: ${PROXY_AUTH_SECRET:?Set PROXY_AUTH_SECRET in deploy/.env.production}
+      PROTECTED_APPS: >-
+        [{"id":"masters","name":"Master's Tracker","url":"https://masters.haguma.com"}]
+      SESSION_TTL_HOURS: "168"
+      DATABASE_PATH: /data/gatekeeper.sqlite
+      # Start with false, inspect the actual frontend and Caddy IPs, then set
+      # their exact /32 addresses in deploy/.env.production and recreate backend.
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+    volumes:
+      - gatekeeper_data:/data
+    networks:
+      - private
+      # Caddy calls the backend directly for the private /auth/verify check.
+      - caddy_network
+    expose:
+      - "4000"
+    read_only: true
+    tmpfs:
+      - /tmp
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 20s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+  frontend_gatekeeper:
+    image: gatekeeper-frontend:${GATEKEEPER_RELEASE:-haguma-test1}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: frontend
+    restart: unless-stopped
+    depends_on:
+      backend_gatekeeper:
+        condition: service_healthy
+    networks:
+      - private
+      - caddy_network
+    expose:
+      - "80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/nginx-health"]
+      interval: 20s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+networks:
+  private: {}
+  caddy_network:
+    external: true
+
+volumes:
+  gatekeeper_data: {}

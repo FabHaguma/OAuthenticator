@@ -1,0 +1,46 @@
+# MERGE these two site blocks into your existing Caddyfile. Do not replace it.
+# Phase 1: add only login.haguma.com, validate/reload, and test login first.
+# Phase 2: REPLACE the existing masters.haguma.com block with the block below.
+# Keep every other site's routing as it is.
+# Replace PASTE_THE_PROXY_SECRET_HERE with the EXACT PROXY_AUTH_SECRET from
+# deploy/.env.production. Keep the deployed Caddyfile private; do not commit it.
+
+login.haguma.com {
+    route {
+        @internal path /auth/* /admin/* /socket.io/*
+        respond @internal 404
+
+        reverse_proxy frontend_gatekeeper:80 {
+            header_up -X-Gatekeeper-Proxy-Key
+        }
+    }
+}
+
+masters.haguma.com {
+    route {
+        forward_auth backend_gatekeeper:4000 {
+            uri /auth/verify
+            header_up X-Gatekeeper-Proxy-Key PASTE_THE_PROXY_SECRET_HERE
+            header_up X-Forwarded-Proto {scheme}
+            header_up X-Forwarded-Host {hostport}
+            header_up X-Forwarded-Uri {orig_uri}
+            header_up X-Forwarded-Method {orig_method}
+            header_up X-Forwarded-For {remote_host}
+            transport http {
+                dial_timeout 3s
+                response_header_timeout 5s
+            }
+        }
+
+        reverse_proxy masters-frontend:80 {
+            # Preserve Master's Tracker cookies while redacting Gatekeeper's token.
+            header_up Cookie "(^|;[ \\t]*)gatekeeper_session=[^;]*" "${1}gatekeeper_session="
+            header_up -X-Gatekeeper-Proxy-Key
+        }
+    }
+}
+
+# Optional for other trusted haguma.com sites, INSIDE their existing reverse_proxy:
+# header_up Cookie "(^|;[ \\t]*)gatekeeper_session=[^;]*" "${1}gatekeeper_session="
+# This avoids forwarding the shared login credential to those apps. It does not
+# add a login gate to them. Never redact it from login.haguma.com's API requests.
