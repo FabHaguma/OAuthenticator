@@ -18,8 +18,7 @@ services:
       GATEKEEPER_USERNAME: Fabrice
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in deploy/.env.production}
       PROXY_AUTH_SECRET: ${PROXY_AUTH_SECRET:?Set PROXY_AUTH_SECRET in deploy/.env.production}
-      PROTECTED_APPS: >-
-        [{"id":"masters","name":"Master's Tracker","url":"https://masters.haguma.com"}]
+      PROTECTED_APPS: ${PROTECTED_APPS:?Set PROTECTED_APPS in deploy/.env.production}
       SESSION_TTL_HOURS: "168"
       DATABASE_PATH: /data/gatekeeper.sqlite
       # Start with false, inspect the actual frontend and Caddy IPs, then set
