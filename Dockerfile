@@ -13,7 +13,10 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /build/backend
 COPY backend/package.json backend/package-lock.json ./
-RUN npm ci --omit=dev && npm cache clean --force
+# Compile native modules against this image's GLIBC instead of downloading
+# prebuilt SQLite binaries that may require a newer Linux runtime.
+RUN npm_config_build_from_source=true npm ci --omit=dev \
+    && npm cache clean --force
 
 FROM node:22-bookworm-slim AS backend
 ENV NODE_ENV=production
@@ -25,6 +28,8 @@ COPY --chown=node:node backend/db/ ./db/
 COPY --chown=node:node backend/scripts/ ./scripts/
 RUN mkdir -p /data && chown node:node /data
 USER node
+# Catch native-library incompatibilities during the build, before deployment.
+RUN node -e "require('sqlite3'); require('bcrypt')"
 EXPOSE 4000
 CMD ["node", "server.js"]
 
